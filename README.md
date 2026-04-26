@@ -23,7 +23,7 @@ This is written for IT administrators, security analysts, and SOC engineers who 
 
 | Detail | Info |
 |--------|------|
-| User | johnsmith@eaglesecureit.com |
+| User | johnsmith@eagXXXX@XXit.com |
 | Device | Personal MacBook, Firefox browser |
 | Target | Microsoft 365: Outlook Web and Azure resources |
 | Tools used | Entra ID Portal, Microsoft Sentinel KQL |
@@ -160,7 +160,7 @@ After the policy change, the sign-in completed successfully. The "Stay signed in
 ---
 
 
-<img width="758" height="561" alt="image" src="https://github.com/user-attachments/assets/3b1529d4-45e0-4493-8e07-72c00feb5552" />
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/3b1529d4-45e0-4493-8e07-72c00feb5552" />
 
 
 ---
