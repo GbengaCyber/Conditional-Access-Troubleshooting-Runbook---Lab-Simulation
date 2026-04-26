@@ -25,9 +25,8 @@ This is written for IT administrators, security analysts, and SOC engineers who 
 |--------|------|
 | User | johnsmith@eaglesecureit.com |
 | Device | Personal MacBook, Firefox browser |
-| Target | Microsoft 365 (Outlook Web, Azure resources) |
-| Secondary issue | RDP access to an Azure VM (soclab) from the same MacBook |
-| Tools used | Entra ID Portal, Azure Run Command, Microsoft Sentinel KQL |
+| Target | Microsoft 365 — Outlook Web and Azure resources |
+| Tools used | Entra ID Portal, Microsoft Sentinel KQL |
 
 The user was completely locked out. Sign-in logs showed a block but the reason was not immediately obvious. This runbook walks through exactly how it was diagnosed and resolved.
 
@@ -35,13 +34,9 @@ The user was completely locked out. Sign-in logs showed a block but the reason w
 
 ## What Was Actually Happening
 
-There were two separate problems layered on top of each other, which made it look more complicated than it was.
+The corporate network Conditional Access policy required a compliant device. The MacBook was not enrolled in Intune, so Entra ID refused to issue a token regardless of the fact that the user's credentials were correct and MFA passed. Adding the IPv6 address to the trusted Named Location helped get past the initial network check, but the device compliance requirement still blocked the token.
 
-The first problem was the Entra ID sign-in block. The corporate network Conditional Access policy required a compliant device. The MacBook was not enrolled in Intune, so Entra ID refused to issue a token regardless of the fact that the user's credentials were correct and MFA passed. Adding the IPv6 address to the trusted Named Location helped get past the initial network check, but the device compliance requirement still blocked the token.
-
-The second problem was the RDP connection to the Azure VM. Even after fixing the Entra sign-in, the VM was rejecting the connection because Network Level Authentication was enforced and the local account did not have the right to log on through Remote Desktop Services.
-
-Both problems are common. Neither is obvious until you know what to look for.
+The fix required two things: correcting the Named Location to include the IPv6 range, and modifying the CA policy so that macOS browser sessions were no longer held to the compliant device requirement.
 
 ---
 
@@ -63,19 +58,7 @@ Conditional Access policies evaluate the device making the authentication reques
 
 ---
 
-## Part 1 — Entra ID Sign-In Blocked
-
-### What the user reported
-
-The user tried to sign into Microsoft 365 and received a generic "having trouble signing you in" error with error code AADSTS900561.
-
-![Sign-in error](./screenshots/01-sign-in-error-aadsts900561.png)
-
-AADSTS900561 means the authentication endpoint received a GET request when it expected a POST. This is a redirect issue that shows up when the auth flow gets interrupted mid-session. It is a symptom of something blocking the login before it completes, not the root cause itself.
-
----
-
-### Step 1 — Read the sign-in logs
+## Step 1 — Read the Sign-In Logs
 
 The first place to look is always the Entra ID sign-in logs. Navigate to the Entra portal, go to Monitoring and then Sign-in logs, and filter by the affected user.
 
@@ -97,19 +80,25 @@ ResultType 53003 means one thing: a Conditional Access policy blocked the token 
 
 This tells you the user got past credential verification and MFA but was stopped before receiving a token. The block happened at the authorization layer, not the authentication layer.
 
+The user had also seen this error on screen when the sign-in was first attempted:
+
+![Sign-in error AADSTS900561](./screenshots/01-sign-in-error-aadsts900561.png)
+
+AADSTS900561 is a redirect issue that appears when the auth flow gets interrupted mid-session. It is a symptom, not the root cause.
+
 ---
 
-### Step 2 — Find which policy is blocking
+## Step 2 — Find Which Policy Is Blocking
 
 Open the individual sign-in event and go to the Conditional Access tab. This shows every policy that evaluated the sign-in and what the result was.
 
 ![CA policy failure tab](./screenshots/06-ca-policy-failure-tab.png)
 
-The blocking policy was Corporate Network - MFA Req... and the grant controls listed were Require compliant device and Require MFA. The result was Failure. MFA likely passed. The compliant device requirement did not.
+The blocking policy was Corporate Network — MFA Required and the grant controls listed were Require compliant device and Require MFA. The result was Failure. MFA likely passed. The compliant device requirement did not.
 
 ---
 
-### Step 3 — Understand why the device failed
+## Step 3 — Understand Why the Device Failed
 
 The user's corporate Windows VM was fully enrolled in Intune and marked compliant. But the sign-in was happening from a MacBook running Firefox. Entra ID evaluates the device that is making the authentication request, not the device the user is trying to access.
 
@@ -123,9 +112,9 @@ The message was essentially: enroll this device or you cannot proceed.
 
 ---
 
-### Step 4 — Fix the Named Location first
+## Step 4 — Fix the Named Location First
 
-Before touching the CA policy there was a separate issue. The corporate network Named Location in Entra ID only had the IPv4 range defined. The user's connection was coming over IPv6, so Entra ID did not recognize it as a trusted corporate network location at all.
+Before touching the CA policy there was a separate issue to resolve. The corporate network Named Location in Entra ID only had the IPv4 range defined. The user's connection was coming over IPv6, so Entra ID did not recognize it as a trusted corporate network location at all.
 
 Navigate to Entra ID, then Protection, then Named Locations, and open the Corporate Network trusted location entry. Add the IPv6 range alongside the existing IPv4 entry.
 
@@ -135,7 +124,7 @@ This alone did not fix the block but it was a necessary step. Without the correc
 
 ---
 
-### Step 5 — Modify the CA policy for macOS
+## Step 5 — Modify the CA Policy for macOS
 
 With the Named Location corrected, the remaining block was the compliant device requirement applied to the MacBook.
 
@@ -149,7 +138,7 @@ If you want to be more precise, create a second CA policy scoped specifically to
 
 ---
 
-### Result
+## Result
 
 After the policy change, the sign-in completed successfully. The "Stay signed in?" prompt confirmed that all CA checks had passed and a token was issued.
 
@@ -157,7 +146,7 @@ After the policy change, the sign-in completed successfully. The "Stay signed in
 
 ---
 
-### What to do long term
+## What to Do Long Term
 
 Disabling device compliance for macOS is a pragmatic fix but it does reduce the security posture. If employees regularly work from personal Macs, the proper fix is enrolling those devices in Intune through Company Portal. Once enrolled and compliant, the CA policy works as designed without any platform exclusions.
 
@@ -165,7 +154,7 @@ Either way, document the decision. The next engineer who reviews this policy nee
 
 ---
 
-### Quick reference for this error pattern
+## Quick Reference for This Error Pattern
 
 If a user is blocked with ResultType 53003 and the CA policy shows a compliant device failure, ask these questions before touching anything.
 
@@ -176,150 +165,6 @@ Is the user's IP in the correct Named Location, including IPv6 ranges? A missing
 Is the policy set to require all grant controls or any grant control? If it requires all, then both MFA and device compliance must pass.
 
 Is there a break-glass admin account excluded from this policy? There should always be one. Add one before making any changes.
-
----
-
-## Part 2 — RDP Access Failure from macOS
-
-### What the user reported
-
-After fixing the Entra ID sign-in, the user tried to RDP from their MacBook into the Azure VM at 4.239.125.45. The connection attempt failed with error code 0x1307.
-
-![RDP unable to connect error 0x1307](./screenshots/07-rdp-error-0x1307.png)
-
-> We couldn't connect to the remote PC because the admin has restricted the type of logon that you may use.
-
-Error 0x1307 is a logon restriction error. It means the user's security token does not have the privileges required for the type of logon being attempted. It is not a password error and it is not a firewall error.
-
----
-
-### Step 1 — Check Sentinel for logon failures
-
-Before touching anything on the VM, look at what Sentinel captured.
-
-```kql
-DeviceLogonEvents
-| where DeviceName contains "soclab"
-| project TimeGenerated, AccountName, DeviceName, ActionType, LogonType, Protocol
-```
-
-![Sentinel NTLM logon failure](./screenshots/04-sentinel-ntlm-logonfailed.png)
-
-The result showed a LogonFailed event for labuser on soclab with LogonType Network and Protocol NTLM.
-
-This tells you three things. The connection reached the machine, otherwise there would be no logon event at all. The authentication protocol being used was NTLM, not Kerberos. And the logon type was Network, which is what RDP uses when NLA is enabled.
-
----
-
-### Step 2 — Get PowerShell access without RDP
-
-This is where most people get stuck. RDP is broken, so how do you fix what is on the VM?
-
-The answer for Azure VMs is Azure Run Command. Go to the Azure portal, find the VM, and look for Run Command under Operations in the left menu. This gives you a PowerShell prompt that executes directly on the VM through the Azure agent with no network dependency. It is invaluable for situations like this and worth knowing well before you need it.
-
----
-
-### Step 3 — Check the Remote Desktop Users group
-
-```powershell
-net localgroup "Remote Desktop Users"
-```
-
-![Remote Desktop Users group empty](./screenshots/10-rdp-users-group-empty.png)
-
-The group showed no members. That looked like the issue, but when we tried to add labuser, the command came back saying the account was already a member. This is a display quirk that can happen with domain-joined machines. The membership was fine.
-
----
-
-### Step 4 — Check Network Level Authentication
-
-NLA is the real culprit for this class of error when connecting from a Mac with a local Windows account.
-
-```powershell
-Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication"
-```
-
-![NLA enabled showing value 1](./screenshots/11-nla-enabled.png)
-
-UserAuthentication: 1 — NLA was enforced.
-
-When NLA is on, Windows requires the connecting client to authenticate at the network layer before the RDP session even starts. On a domain-joined Windows machine connecting to another domain machine, this works seamlessly via Kerberos. From a Mac connecting with a local Windows account over NTLM, the handshake cannot complete. Windows sees an incomplete authentication attempt and refuses the connection with 0x1307.
-
----
-
-### Step 5 — Check the labuser account
-
-```powershell
-net user labuser
-```
-
-![labuser account details](./screenshots/12-labuser-account-details.png)
-
-The account was clean. Active, no expiry, password set today, member of both Administrators and Remote Desktop Users. Nothing wrong with the account itself.
-
----
-
-### Step 6 — Disable NLA
-
-```powershell
-Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 0
-```
-
-Verify the change took effect:
-
-```powershell
-Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication"
-```
-
-![NLA disabled showing value 0](./screenshots/13-nla-disabled.png)
-
-UserAuthentication: 0 — NLA is now off.
-
----
-
-### Step 7 — Fix the Remote Desktop Services logon right
-
-After disabling NLA, the next attempt reached the Windows login screen but showed this:
-
-![Other user screen on soclab](./screenshots/14-other-user-screen.png)
-
-> To sign in remotely, you need the right to sign in through Remote Desktop Services.
-
-This is a Group Policy user rights issue. The SeRemoteInteractiveLogonRight had been removed or overwritten, likely by a domain Group Policy. Being a member of the Remote Desktop Users group is not enough on its own if the group's logon right has been stripped at the policy level.
-
-Fix it by exporting the local security policy, adding labuser, and reimporting:
-
-```powershell
-$sid = (New-Object System.Security.Principal.NTAccount("labuser")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-
-secedit /export /cfg "C:\Windows\Temp\secpol.cfg"
-(Get-Content "C:\Windows\Temp\secpol.cfg") -replace 'SeRemoteInteractiveLogonRight = ', "SeRemoteInteractiveLogonRight = *$sid," | Set-Content "C:\Windows\Temp\secpol.cfg"
-secedit /configure /db secedit.sdb /cfg "C:\Windows\Temp\secpol.cfg" /areas USER_RIGHTS
-gpupdate /force
-```
-
-Verify the right was applied:
-
-```powershell
-secedit /export /cfg "C:\Windows\Temp\check.cfg"
-Get-Content "C:\Windows\Temp\check.cfg" | Select-String "SeRemoteInteractiveLogonRight"
-```
-
-![SeRemoteInteractiveLogonRight granted](./screenshots/15-seremoteinteractive-granted.png)
-
-The output confirmed labuser was explicitly listed alongside the Administrators group and the Remote Desktop Users group.
-
----
-
-### Username format on Mac RDP clients
-
-When connecting from Microsoft Remote Desktop on macOS, always use `.\labuser` or `soclab\labuser` to explicitly target the local account. Using just `labuser` can cause the client to attempt a domain lookup which will fail if the account is local.
-
----
-
-### Production considerations
-
-Disabling NLA removes a layer of protection. In a production environment, the better path is using Entra ID joined machines and connecting with Entra credentials rather than local accounts, or setting up Azure Bastion which handles the authentication layer separately and avoids the NTLM problem entirely.
 
 ---
 
@@ -366,25 +211,6 @@ SigninLogs
 | where PolicyResult == "failure"
 ```
 
-**All logon activity on a specific machine**
-
-```kql
-DeviceLogonEvents
-| where DeviceName contains "soclab"
-| project TimeGenerated, AccountName, DeviceName, ActionType, LogonType, Protocol
-| order by TimeGenerated desc
-```
-
-**All NTLM failures across the environment**
-
-```kql
-DeviceLogonEvents
-| where Protocol == "NTLM"
-| where ActionType == "LogonFailed"
-| project TimeGenerated, AccountName, DeviceName, LogonType, RemoteIP
-| order by TimeGenerated desc
-```
-
 **Common ResultType codes**
 
 | Code | Meaning |
@@ -405,4 +231,4 @@ Build your runbooks before the incident, not during it. The 45 minutes spent fir
 
 ---
 
-> This runbook was built from a real troubleshooting session in a lab environment (EagleSecureIT). Some fixes applied here, such as disabling NLA, are appropriate for lab use but should be reviewed carefully before applying in production.
+> This runbook was built from a real troubleshooting session in a lab environment (EagleSecureIT). Settings and policy names have been kept as-is to reflect how the investigation actually unfolded.
