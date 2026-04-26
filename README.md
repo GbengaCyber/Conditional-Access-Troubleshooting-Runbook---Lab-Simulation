@@ -5,7 +5,7 @@
 
 ## The Business Problem
 
-Picture this. A staff member works from home on their personal MacBook. They try to access company email and get blocked. They call IT. IT does not have a documented process for this. Someone spends 45 minutes poking around the Entra portal before finding the right setting. The employee loses half a morning of productivity. And if this happens to ten people in a month, that is a real cost — in time, in frustration, and in the risk of someone making a hasty policy change that opens a security gap.
+Picture this. A staff member works from home on their personal MacBook. They try to access company email and get blocked. They call IT. IT does not have a documented process for this. Someone spends 45 minutes poking around the Entra portal before finding the right setting. The employee loses half a morning of productivity. And if this happens to ten people in a month, that is a real cost, in time, in frustration, and in the risk of someone making a hasty policy change that opens a security gap.
 
 This runbook exists to prevent that.
 
@@ -15,7 +15,7 @@ It documents a real troubleshooting session from start to finish — the errors,
 
 ## Who This Is For
 
-This is written for IT administrators, security analysts, and SOC engineers who manage Microsoft Entra ID and Intune in environments where employees use a mix of corporate and personal devices — particularly where macOS or unmanaged devices need access to Microsoft 365 resources.
+This is written for IT administrators, security analysts, and SOC engineers who manage Microsoft Entra ID and Intune in environments where employees use a mix of corporate and personal devices, particularly where macOS or unmanaged devices need access to Microsoft 365 resources.
 
 ---
 
@@ -25,7 +25,7 @@ This is written for IT administrators, security analysts, and SOC engineers who 
 |--------|------|
 | User | johnsmith@eaglesecureit.com |
 | Device | Personal MacBook, Firefox browser |
-| Target | Microsoft 365 — Outlook Web and Azure resources |
+| Target | Microsoft 365: Outlook Web and Azure resources |
 | Tools used | Entra ID Portal, Microsoft Sentinel KQL |
 
 The user was completely locked out. Sign-in logs showed a block but the reason was not immediately obvious. This runbook walks through exactly how it was diagnosed and resolved.
@@ -45,7 +45,7 @@ The fix required two things: correcting the Named Location to include the IPv6 r
 | Area | Impact |
 |------|--------|
 | Productivity | Employee locked out of all M365 resources during working hours |
-| IT time cost | ~45 minutes to diagnose without a runbook, ~10 minutes with one |
+| IT time cost | 45 minutes to diagnose without a runbook, ~10 minutes with one |
 | Security risk | Rushed CA policy changes without testing can create gaps or cause wider lockouts |
 | Compliance | Unmanaged device accessing corporate data without proper controls flagged in audit logs |
 | Scalability | Without documentation, every repeat incident costs the same time to resolve |
@@ -72,9 +72,10 @@ SigninLogs
 
 The result came back with ResultType 53003.
 
+---
 <img width="800" alt="image" src="https://github.com/user-attachments/assets/a85a85f9-cdee-4ac2-af5b-f2f1b37336b4" />
 
-
+--
 ResultType 53003 means one thing: a Conditional Access policy blocked the token from being issued. The full description read:
 
 > Access has been blocked by Conditional Access policies. The access policy does not allow token issuance.
@@ -83,7 +84,11 @@ This tells you the user got past credential verification and MFA but was stopped
 
 The user had also seen this error on screen when the sign-in was first attempted:
 
-![Sign-in error AADSTS900561](./screenshots/01-sign-in-error-aadsts900561.png)
+---
+
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/ae986209-22f0-4024-8f61-a8af340e5e54" />
+
+---
 
 AADSTS900561 is a redirect issue that appears when the auth flow gets interrupted mid-session. It is a symptom, not the root cause.
 
@@ -93,8 +98,13 @@ AADSTS900561 is a redirect issue that appears when the auth flow gets interrupte
 
 Open the individual sign-in event and go to the Conditional Access tab. This shows every policy that evaluated the sign-in and what the result was.
 
-![CA policy failure tab](./screenshots/06-ca-policy-failure-tab.png)
 
+---
+
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/7a55ccd5-b1fe-40b8-854f-57525abfc8e4" />
+
+
+---
 The blocking policy was Corporate Network — MFA Required and the grant controls listed were Require compliant device and Require MFA. The result was Failure. MFA likely passed. The compliant device requirement did not.
 
 ---
@@ -107,8 +117,10 @@ The MacBook was not enrolled in Intune. From Entra ID's perspective it was an un
 
 When the user clicked Continue on the device prompt, they saw this:
 
-![Device compliance prompt](./screenshots/02-device-compliance-prompt.png)
+---
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/f962f68d-299b-4a32-bfb1-1b74d254f462" />
 
+---
 The message was essentially: enroll this device or you cannot proceed.
 
 ---
@@ -119,8 +131,10 @@ Before touching the CA policy there was a separate issue to resolve. The corpora
 
 Navigate to Entra ID, then Protection, then Named Locations, and open the Corporate Network trusted location entry. Add the IPv6 range alongside the existing IPv4 entry.
 
-![Named location with IPv6 added](./screenshots/03-named-location-ipv6-added.png)
+---
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/179032aa-81c2-4299-9736-aa19d3caabc7" />
 
+---
 This alone did not fix the block but it was a necessary step. Without the correct IP ranges, the network condition in the policy would never match correctly.
 
 ---
@@ -143,7 +157,11 @@ If you want to be more precise, create a second CA policy scoped specifically to
 
 After the policy change, the sign-in completed successfully. The "Stay signed in?" prompt confirmed that all CA checks had passed and a token was issued.
 
-![Successful Entra sign-in](./screenshots/09-entra-signin-success.png)
+---
+
+
+<img width="758" height="561" alt="image" src="https://github.com/user-attachments/assets/3b1529d4-45e0-4493-8e07-72c00feb5552" />
+
 
 ---
 
@@ -232,4 +250,4 @@ Build your runbooks before the incident, not during it. The 45 minutes spent fir
 
 ---
 
-> This runbook was built from a real troubleshooting session in a lab environment (EagleSecureIT). Settings and policy names have been kept as-is to reflect how the investigation actually unfolded.
+> This runbook was built from a real troubleshooting session in a lab environment. Settings and policy names have been kept as-is to reflect how the investigation actually unfolded.
