@@ -1,4 +1,4 @@
-# Conditional Access Troubleshooting Runbook
+# Conditional Access Troubleshooting Runbook - Entra ID
 ### For IT and Security Teams Managing Mixed Device Environments
 
 ---
@@ -9,7 +9,7 @@ Picture this. A staff member works from home on their personal MacBook. They try
 
 This runbook exists to prevent that.
 
-It documents a real troubleshooting session from start to finish — the errors, the investigation steps, the dead ends, and the fixes. The goal is that the next time this happens, anyone on the team can pick this up and work through it systematically rather than starting from scratch.
+It documents a real troubleshooting session from start to finish, the errors, the investigation steps, the dead ends, and the fixes. The goal is that the next time this happens, anyone on the team can pick this up and work through it systematically rather than starting from scratch.
 
 ---
 
@@ -105,7 +105,7 @@ Open the individual sign-in event and go to the Conditional Access tab. This sho
 
 
 ---
-The blocking policy was Corporate Network — MFA Required and the grant controls listed were Require compliant device and Require MFA. The result was Failure. MFA likely passed. The compliant device requirement did not.
+The blocking policy was Corporate Network,  MFA Required and the grant controls listed were Require compliant device and Require MFA. The result was Failure. MFA likely passed. The compliant device requirement did not.
 
 ---
 
