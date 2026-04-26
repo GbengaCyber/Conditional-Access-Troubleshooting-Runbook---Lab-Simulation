@@ -72,7 +72,8 @@ SigninLogs
 
 The result came back with ResultType 53003.
 
-![Sentinel sign-in log showing CA block](./screenshots/05-signin-log-ca-blocked-53003.png)
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/a85a85f9-cdee-4ac2-af5b-f2f1b37336b4" />
+
 
 ResultType 53003 means one thing: a Conditional Access policy blocked the token from being issued. The full description read:
 
