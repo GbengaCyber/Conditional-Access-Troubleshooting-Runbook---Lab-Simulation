@@ -75,7 +75,7 @@ The result came back with ResultType 53003.
 ---
 <img width="800" alt="image" src="https://github.com/user-attachments/assets/a85a85f9-cdee-4ac2-af5b-f2f1b37336b4" />
 
---
+---
 ResultType 53003 means one thing: a Conditional Access policy blocked the token from being issued. The full description read:
 
 > Access has been blocked by Conditional Access policies. The access policy does not allow token issuance.
